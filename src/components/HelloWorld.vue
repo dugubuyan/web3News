@@ -6,7 +6,8 @@
           <el-row>
             <el-col :span="8"><h1>欢迎进入发布系统 </h1></el-col>
             <el-col :span="8">&nbsp; &nbsp;</el-col>
-            <el-col :span="8">{{ didKey }}</el-col>
+            <el-col :span="8" v-if="this.didKey!== '' ">{{ didKey }}</el-col>
+            <el-col :span="8" v-else style="float: right"><el-button style="float:right;margin-top: 15px" type="primary" @click="toAuth">connect</el-button></el-col>
           </el-row>
         </div>
       </el-header>
@@ -21,12 +22,12 @@
               <span slot="title">发布</span>
             </el-menu-item>
             <el-menu-item index="2">
-              <i class="el-icon-document"></i>
-              <span slot="title">已发布</span>
-            </el-menu-item>
-            <el-menu-item index="3">
               <i class="el-icon-search"></i>
               <span slot="title">查询</span>
+            </el-menu-item>
+            <el-menu-item index="3">
+              <i class="el-icon-collection-tag"></i>
+              <span slot="title">收藏</span>
             </el-menu-item>
           </el-menu>
         </el-aside>
@@ -54,6 +55,11 @@
               </el-form-item>
             </el-form>
           </div>
+          <div v-if="collectVisible">
+            <el-card>
+
+            </el-card>
+          </div>
           <div v-if="queryVisible">
             <el-form status-icon label-width="100px" class="demo-ruleForm">
               <el-form-item label="StreamId" prop="pass">
@@ -79,18 +85,19 @@
 </template>
 
 <script>
-import {loadDocument, auth, createDocument} from './HelloWorld'
+import {loadDocument, auth, createDocument, tryAuthenticate, getDid} from './HelloWorld'
 export default {
   name: 'HelloWorld',
   created() {
-    const did = auth()
-    this.didKey = did.id
+    // const did = getDid()
+    // this.didKey = did.id
   },
   data() {
     return {
       didKey : '',
       pubVisible: true,
       queryVisible: false,
+      collectVisible: false,
       form :{
         name: '',
         author: '',
@@ -126,16 +133,21 @@ export default {
       if( key === '1'){
         this.pubVisible = true
         this.queryVisible = false
+        this.collectVisible = false
       } else if(key === '2'){
         loadDocument('kjzl6cwe1jw147jx2oie8zvmutyeu7appqezfbt56qc16wllmqoy8p107x0syno').then(loadDoc=>{
           console.log("anchorCommitIds --------> " + loadDoc.anchorCommitIds)
           console.log("last commit --------> " + loadDoc.commitId)
           console.log(loadDoc.content)
+          this.queryVisible = true
+          this.pubVisible = false
+          this.collectVisible = false
         })
         console.log(this.streamIds)
       } else if (key === '3') {
-        this.queryVisible = true
+        this.queryVisible = false
         this.pubVisible = false
+        this.collectVisible = true
       }
     },
     publish (form) {
@@ -164,6 +176,13 @@ export default {
     clearArticle() {
       this.keyWords=''
       this.article = {}
+    },
+    toAuth() {
+      tryAuthenticate().then(did=>{
+        console.log(did)
+        this.didKey = did.id
+      })
+      console.log(this.didKey)
     }
   }
 }
