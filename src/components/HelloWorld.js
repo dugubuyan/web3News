@@ -1,5 +1,7 @@
 import { TileDocument } from '@ceramicnetwork/stream-tile'
 import { CeramicClient } from '@ceramicnetwork/http-client'
+import { DataModel } from '@glazed/datamodel'
+import { DIDDataStore } from '@glazed/did-datastore'
 
 import { DID } from 'dids'
 import { Ed25519Provider } from 'key-did-provider-ed25519'
@@ -7,10 +9,12 @@ import {getResolver as getKeyResolver, getResolver} from 'key-did-resolver'
 import { fromString } from 'uint8arrays'
 import {getResolver as get3IDResolver} from "@ceramicnetwork/3id-did-resolver";
 import { EthereumAuthProvider, ThreeIdConnect } from '@3id/connect'
+// Import the model aliases created during development time
+import modelAliases from '../assets/cfmodel.json'
 
 // Create the Ceramic instance and inject the DID
-//const ceramic = new CeramicClient('http://localhost:7007')
-const ceramic = new CeramicClient("https://ceramic-clay.3boxlabs.com")
+const ceramic = new CeramicClient('http://localhost:7007')
+//const ceramic = new CeramicClient("https://ceramic-clay.3boxlabs.com")
 //const ceramic = new CeramicClient("https://gateway.ceramic.network")
 
 export function auth() {
@@ -26,6 +30,79 @@ export function auth() {
         console.log(ceramic.did)
         return ceramic.did
     })
+}
+
+export async function getCollectedInfo() {
+    // Create the model and store
+    const model = new DataModel({ ceramic, aliases: modelAliases })
+    const store = new DIDDataStore({ ceramic, model })
+    const feeds = []
+    try {
+        const repos = await store.get('chainfdUserCollect')
+        console.log(repos)
+        for(const name in repos){
+            const stream = repos[name]
+            console.log(stream)
+            const doc = await loadDocument(stream)
+            feeds.push(doc.content)
+        }
+    } catch (error) {
+        console.error(error);
+        return 'logout'
+        // expected output: ReferenceError: nonExistentFunction is not defined
+        // Note - error messages will vary depending on browser
+    }
+
+    return feeds
+}
+export async function getUsers(){
+    const model = new DataModel({ ceramic, aliases: modelAliases })
+    const store = new DIDDataStore({ ceramic, model })
+    const users = []
+    for (const user in model.aliases.tiles){
+        const doc = await loadDocument(model.aliases.tiles[user])
+        users.push(doc.content)
+    }
+    return users
+}
+
+export async function getFriends(){
+    const model = new DataModel({ ceramic, aliases: modelAliases })
+    const store = new DIDDataStore({ ceramic, model })
+    const friends = []
+    const repos = await store.get('cfFds')
+    console.log(repos)
+    for(const name in repos){
+        const stream = repos[name]
+        console.log(stream)
+        const doc = await loadDocument(stream)
+        friends.push(doc.content)
+    }
+    return friends
+}
+
+export async function addMyFriend(item) {
+    const model = new DataModel({ ceramic, aliases: modelAliases })
+    const store = new DIDDataStore({ ceramic, model })
+    const user = await model.loadTile(item)
+    console.log(user.id.toString())
+    const friend = {}
+    friend[item] = user.id.toString()
+    await store.merge('cfFds', friend)
+}
+
+export async function clearMyFriend(name) {
+    const model = new DataModel({ ceramic, aliases: modelAliases })
+    const store = new DIDDataStore({ ceramic, model })
+    const friends= await store.get('cfFds')
+    delete friends[name]
+    await store.set('cfFds', friends)
+}
+
+export async function clearALlFriends() {
+    const model = new DataModel({ ceramic, aliases: modelAliases })
+    const store = new DIDDataStore({ ceramic, model })
+    await store.set('cfFds', {})
 }
 
 // When using extensions such as MetaMask, an Ethereum provider may be injected as `window.ethereum`
@@ -68,9 +145,12 @@ export async function tryAuthenticate() {
 
 
 //  create tile
-export function createDocument(content) {
+export async function createDocument(content, schema) {
     // The following call will fail if the Ceramic instance does not have an authenticated DID
-    return TileDocument.create(ceramic, content)
+    const doc = await TileDocument.create(ceramic, content, { schema })
+    // The stream ID of the created document can then be accessed as the `id` property
+    console.log(doc.id.toString())
+    return doc
 }
 //  update tile
 export function updateDocument(id, content) {
@@ -121,6 +201,22 @@ export function createUseSchema(schemaId){
 export function pin(streamId){
     ceramic.pin.add(streamId)
 }
+
+export async function collect(item) {
+    // Create the model and store
+    const model = new DataModel({ ceramic, aliases: modelAliases })
+    const store = new DIDDataStore({ ceramic, model })
+    console.log(item)
+    // const schema = await TileDocument.load(ceramic, 'kjzl6cwe1jw146vt5ug8jtwb7ylub2llqb3otb1gm7mtujd0d2grwym0gw0ud29');
+    // The following call will fail if the Ceramic instance does not have an authenticated DID
+    const doc = await createDocument(item, 'k3y52l7qbv1frxsy7dkjgt0lrsm3biqhmj2y8geie5yac95oikxjaie4jc3pzww00')
+    // The stream ID of the created document can then be accessed as the `id` property
+    console.log(doc.id)
+    const content = {}
+    content[item.uuid] = doc.id.toString()
+    await store.merge('chainfdUserCollect', content)
+}
+
 //await createDocument('{"hello world": "feedChain","author": "admin", "other":"hahahah2222"}')
 //await updateDocument('kjzl6cwe1jw149g31a14dwi85n6wd51ikvpx3m709ejcfxrshvuo6g4ou6xmu0d', '{"hello111": "update feedChain 1111"}')
 // const doc = await loadDocument('kjzl6cwe1jw147jx2oie8zvmutyeu7appqezfbt56qc16wllmqoy8p107x0syno')
